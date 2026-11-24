@@ -82,6 +82,14 @@ if st.session_state.ruolo is None:
             else:
                 st.error("Password errata.")
 
+        with st.expander("❓ Hai dimenticato o vuoi cambiare la password?"):
+            st.markdown("""
+            Per motivi di sicurezza la password docente è protetta nelle impostazioni del server:
+            1. Clicca su **Manage app** (in basso a destra) e accedi con il tuo account amministratore.
+            2. Vai su **Settings** (⋮) → **Secrets**.
+            3. Modifica o controlla il valore accanto a `PASSWORD_DOCENTE = "..."` e clicca **Save**.
+            """)
+
 # --- AREA DOCENTE ---
 elif st.session_state.ruolo == "docente":
     st.sidebar.title("📋 Menu Docente")
@@ -207,15 +215,92 @@ elif st.session_state.ruolo == "docente":
         st.header("⏱️ Registrazione Test Fisici e Calcolo Voti")
         studenti_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
         if not studenti_list:
-            st.warning("Nessuno studente registrato.")
-        else:
-            mappa_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in studenti_list}
-            stud_scelto = st.selectbox("Seleziona Studente:", list(mappa_stud.keys()))
-            tipo_test = st.selectbox("Tipo di Test:", [
-                "Corsa 1000m (secondi)",
-                "Salto in lungo da fermo (cm)",
-                "Addominali in 1 minuto (ripetizioni)"
-            ])
+    # 4. CRONOMETRO / TIMER
+    elif menu == "4. Cronometro / Timer":
+        st.header("⏱️ Cronometro & Timer Allenamento")
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            st.subheader("⏲️ Conto alla Rovescia")
+            secondi_timer = st.number_input("Imposta secondi:", min_value=5, max_value=3600, value=60, step=5)
+            if st.button("▶️ Avvia Timer"):
+                placeholder = st.empty()
+                for s in range(int(secondi_timer), -1, -1):
+                    mins, secs = divmod(s, 60)
+                    placeholder.markdown(f"# ⏳ {mins:02d}:{secs:02d}")
+                    time.sleep(1)
+                placeholder.success("🔔 Tempo scaduto!")
+
+        with col_t2:
+            st.subheader("⏱️ Cronometro Manuale")
+            if "crono_start" not in st.session_state:
+                st.session_state.crono_start = None
+            if st.button("🟢 Start"):
+                st.session_state.crono_start = time.time()
+            if st.button("🔴 Stop / Rileva Tempo"):
+                if st.session_state.crono_start:
+                    trascorso = round(time.time() - st.session_state.crono_start, 2)
+                    st.success(f"Tempo rilevato: **{trascorso} secondi**")
+                else:
+                    st.warning("Premi prima Start!")
+
+    # 5. TORNEI E CLASSIFICHE
+    elif menu == "5. Tornei e Classifiche":
+        st.header("🏆 Tornei e Classifiche")
+        st.info("Registra i risultati delle partite o consulta la classifica generale del torneo scolastico.")
+        col_tor1, col_tor2 = st.columns(2)
+        with col_tor1:
+            squadra_1 = st.text_input("Squadra / Classe 1:")
+            punti_1 = st.number_input("Punteggio Squadra 1:", min_value=0, step=1)
+        with col_tor2:
+            squadra_2 = st.text_input("Squadra / Classe 2:")
+            punti_2 = st.number_input("Punteggio Squadra 2:", min_value=0, step=1)
+
+        if st.button("💾 Registra Risultato Partita"):
+            if squadra_1 and squadra_2:
+                try:
+                    supabase.table("tornei").insert({
+                        "squadra_a": squadra_1.strip(),
+                        "squadra_b": squadra_2.strip(),
+                        "punti_a": int(punti_1),
+                        "punti_b": int(punti_2),
+                        "data_partita": str(date.today())
+                    }).execute()
+                    st.success("Risultato salvato!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore database (verifica la tabella 'tornei'): {e}")
+
+    # 6. BACHECA AVVISI
+    elif menu == "6. Bacheca Avvisi":
+        st.header("📢 Bacheca Avvisi per gli Studenti")
+        titolo_avviso = st.text_input("Titolo dell'avviso:")
+        testo_avviso = st.text_area("Messaggio:")
+        if st.button("📤 Pubblica Avviso"):
+            if titolo_avviso and testo_avviso:
+                try:
+                    supabase.table("avvisi").insert({
+                        "titolo": titolo_avviso.strip(),
+                        "messaggio": testo_avviso.strip(),
+                        "data_pubblicazione": str(date.today())
+                    }).execute()
+                    st.success("Avviso pubblicato!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore nella pubblicazione: {e}")
+
+        st.divider()
+        st.subheader("Avvisi Pubblicati")
+        try:
+            avvisi_list = supabase.table("avvisi").select("*").order("id", desc=True).execute().data
+            for avv in avvisi_list:
+                with st.expander(f"📌 {avv.get('titolo', 'Avviso')} ({avv.get('data_pubblicazione', '')})"):
+                    st.write(avv.get("messaggio", ""))
+                    if st.button("🗑️ Elimina", key=f"del_avv_{avv['id']}"):
+                        supabase.table("avvisi").delete().eq("id", avv["id"]).execute()
+                        st.rerun()
+        except Exception:
+            st.info("Nessun avviso presente.")
+
     # 7. SQUADRE & SEGNAPUNTI
     elif menu == "7. Squadre & Segnapunti":
         st.header("⚽ Generatore Squadre & Segnapunti Live")
