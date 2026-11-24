@@ -209,12 +209,39 @@ elif st.session_state.ruolo == "docente":
                 st.warning(f"⚠️ **{s['cognome']} {s['nome']}** ({classe_nome}) - In scadenza tra {giorni} giorni ({scad.strftime('%d/%m/%Y')})")
             else:
                 st.success(f"✅ **{s['cognome']} {s['nome']}** ({classe_nome}) - Valido fino al {scad.strftime('%d/%m/%Y')}")
-
     # 3. TEST FISICI E VOTI
     elif menu == "3. Test Fisici e Voti":
         st.header("⏱️ Registrazione Test Fisici e Calcolo Voti")
         studenti_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
         if not studenti_list:
+            st.warning("Nessuno studente registrato.")
+        else:
+            mappa_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in studenti_list}
+            stud_scelto = st.selectbox("Seleziona Studente:", list(mappa_stud.keys()))
+            tipo_test = st.selectbox("Tipo di Test:", [
+                "Corsa 1000m (secondi)",
+                "Salto in lungo da fermo (cm)",
+                "Addominali in 1 minuto (ripetizioni)"
+            ])
+            valore = st.number_input("Risultato ottenuto:", min_value=0.0, step=1.0)
+            voto_calc = calcola_voto(tipo_test, valore)
+            st.info(f"📊 Voto calcolato automaticamente: **{voto_calc}**")
+            voto_finale = st.number_input("Conferma o modifica il voto:", min_value=1.0, max_value=10.0, value=float(voto_calc), step=0.5)
+
+            if st.button("💾 Salva Risultato Test"):
+                try:
+                    supabase.table("test_fisici").insert({
+                        "studente_id": mappa_stud[stud_scelto],
+                        "tipo_test": tipo_test,
+                        "risultato": valore,
+                        "voto": voto_finale,
+                        "data_test": str(date.today())
+                    }).execute()
+                    st.success("Risultato salvato con successo!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore nel salvataggio: {e}")
+
     # 4. CRONOMETRO / TIMER
     elif menu == "4. Cronometro / Timer":
         st.header("⏱️ Cronometro & Timer Allenamento")
@@ -381,28 +408,3 @@ elif st.session_state.ruolo == "studente":
         st.rerun()
 
     st.title(f"🏃‍♂️ Area Personale - {stud['nome']} {stud['cognome']}")
-    classe_nome = stud["classi"]["nome"] if stud.get("classi") else "N/D"
-    st.markdown(f"**Classe:** {classe_nome} | **Scadenza Certificato Medico:** {stud['scadenza_certificato']}")
-
-    st.divider()
-    st.subheader("📊 I tuoi Test Fisici e Voti")
-    try:
-        miei_test = supabase.table("test_fisici").select("*").eq("studente_id", stud["id"]).execute().data
-        if miei_test:
-            st.dataframe(pd.DataFrame(miei_test)[["data_test", "tipo_test", "risultato", "voto"]], use_container_width=True)
-        else:
-            st.info("Nessun test fisico registrato al momento.")
-    except Exception:
-        st.info("Nessun risultato disponibile.")
-
-    st.divider()
-    st.subheader("📢 Bacheca Avvisi")
-    try:
-        avvisi = supabase.table("avvisi").select("*").order("id", desc=True).execute().data
-        if avvisi:
-            for a in avvisi:
-                st.info(f"**{a.get('titolo', '')}** ({a.get('data_pubblicazione', '')})\n\n{a.get('messaggio', '')}")
-        else:
-            st.write("Nessun avviso pubblicato.")
-    except Exception:
-        st.write("Nessun avviso pubblicato.")
