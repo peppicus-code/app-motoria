@@ -216,3 +216,108 @@ elif st.session_state.ruolo == "docente":
                 "Salto in lungo da fermo (cm)",
                 "Addominali in 1 minuto (ripetizioni)"
             ])
+    # 7. SQUADRE & SEGNAPUNTI
+    elif menu == "7. Squadre & Segnapunti":
+        st.header("⚽ Generatore Squadre & Segnapunti Live")
+
+        tab_sq, tab_seg = st.tabs(["🎲 Crea Squadre Casuali", "🔢 Segnapunti Live"])
+
+        with tab_sq:
+            st.subheader("Genera Squadre da una Classe")
+            classi_data = supabase.table("classi").select("*").execute().data
+            if not classi_data:
+                st.warning("Nessuna classe disponibile.")
+            else:
+                mappa_classi = {c["nome"]: c["id"] for c in classi_data}
+                classe_sel = st.selectbox("Seleziona la classe:", list(mappa_classi.keys()), key="sq_classe")
+                studenti_classe = supabase.table("studenti").select("nome, cognome").eq("classe_id", mappa_classi[classe_sel]).execute().data
+
+                if studenti_classe:
+                    nomi_studenti = [f"{s['cognome']} {s['nome']}" for s in studenti_classe]
+                    presenti = st.multiselect("Seleziona gli studenti presenti oggi:", nomi_studenti, default=nomi_studenti)
+                    num_squadre = st.number_input("Numero di squadre da creare:", min_value=2, max_value=8, value=2, step=1)
+
+                    if st.button("🎲 Genera Squadre"):
+                        if len(presenti) >= num_squadre:
+                            lista_mescolata = presenti.copy()
+                            random.shuffle(lista_mescolata)
+                            squadre = [lista_mescolata[i::int(num_squadre)] for i in range(int(num_squadre))]
+                            cols = st.columns(int(num_squadre))
+                            for idx, sq in enumerate(squadre):
+                                with cols[idx]:
+                                    st.markdown(f"### Squadra {idx + 1}")
+                                    for giocatore in sq:
+                                        st.write(f"- {giocatore}")
+                        else:
+                            st.warning("Seleziona almeno tanti studenti quante sono le squadre!")
+                else:
+                    st.info("Nessuno studente registrato in questa classe.")
+
+        with tab_seg:
+            st.subheader("Segnapunti Rapido")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                nome_a = st.text_input("Nome Squadra A:", value="Squadra A")
+                st.markdown(f"<h1 style='text-align: center; font-size: 72px;'>{st.session_state.punti_a}</h1>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                if c1.button("➕ 1 Punto A", use_container_width=True):
+                    st.session_state.punti_a += 1
+                    st.rerun()
+                if c2.button("➖ 1 Punto A", use_container_width=True):
+                    if st.session_state.punti_a > 0:
+                        st.session_state.punti_a -= 1
+                        st.rerun()
+
+            with col_b:
+                nome_b = st.text_input("Nome Squadra B:", value="Squadra B")
+                st.markdown(f"<h1 style='text-align: center; font-size: 72px;'>{st.session_state.punti_b}</h1>", unsafe_allow_html=True)
+                c3, c4 = st.columns(2)
+                if c3.button("➕ 1 Punto B", use_container_width=True):
+                    st.session_state.punti_b += 1
+                    st.rerun()
+                if c4.button("➖ 1 Punto B", use_container_width=True):
+                    if st.session_state.punti_b > 0:
+                        st.session_state.punti_b -= 1
+                        st.rerun()
+
+            st.divider()
+            if st.button("🔄 Azzera Punteggi", use_container_width=True):
+                st.session_state.punti_a = 0
+                st.session_state.punti_b = 0
+                st.rerun()
+
+# --- AREA STUDENTI ---
+elif st.session_state.ruolo == "studente":
+    stud = st.session_state.studente_corrente
+    st.sidebar.title(f"🎓 Ciao, {stud['nome']}!")
+    if st.sidebar.button("🚪 Esci (Logout)"):
+        st.session_state.ruolo = None
+        st.session_state.studente_corrente = None
+        st.rerun()
+
+    st.title(f"🏃‍♂️ Area Personale - {stud['nome']} {stud['cognome']}")
+    classe_nome = stud["classi"]["nome"] if stud.get("classi") else "N/D"
+    st.markdown(f"**Classe:** {classe_nome} | **Scadenza Certificato Medico:** {stud['scadenza_certificato']}")
+
+    st.divider()
+    st.subheader("📊 I tuoi Test Fisici e Voti")
+    try:
+        miei_test = supabase.table("test_fisici").select("*").eq("studente_id", stud["id"]).execute().data
+        if miei_test:
+            st.dataframe(pd.DataFrame(miei_test)[["data_test", "tipo_test", "risultato", "voto"]], use_container_width=True)
+        else:
+            st.info("Nessun test fisico registrato al momento.")
+    except Exception:
+        st.info("Nessun risultato disponibile.")
+
+    st.divider()
+    st.subheader("📢 Bacheca Avvisi")
+    try:
+        avvisi = supabase.table("avvisi").select("*").order("id", desc=True).execute().data
+        if avvisi:
+            for a in avvisi:
+                st.info(f"**{a.get('titolo', '')}** ({a.get('data_pubblicazione', '')})\n\n{a.get('messaggio', '')}")
+        else:
+            st.write("Nessun avviso pubblicato.")
+    except Exception:
+        st.write("Nessun avviso pubblicato.")
