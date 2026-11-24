@@ -3,6 +3,7 @@ from supabase import create_client
 import pandas as pd
 from datetime import datetime, date
 import time
+import random
 
 # Configurazione pagina
 st.set_page_config(page_title="Portale Educazione Motoria", page_icon="🏃‍♂️", layout="wide")
@@ -47,6 +48,10 @@ if "ruolo" not in st.session_state:
     st.session_state.ruolo = None
 if "studente_corrente" not in st.session_state:
     st.session_state.studente_corrente = None
+if "punti_a" not in st.session_state:
+    st.session_state.punti_a = 0
+if "punti_b" not in st.session_state:
+    st.session_state.punti_b = 0
 
 # --- SCHERMATA DI ACCESSO ---
 if st.session_state.ruolo is None:
@@ -86,7 +91,8 @@ elif st.session_state.ruolo == "docente":
         "3. Test Fisici e Voti",
         "4. Cronometro / Timer",
         "5. Tornei e Classifiche",
-        "6. Bacheca Avvisi"
+        "6. Bacheca Avvisi",
+        "7. Squadre & Segnapunti"
     ])
     if st.sidebar.button("🚪 Esci (Logout)"):
         st.session_state.ruolo = None
@@ -210,6 +216,3 @@ elif st.session_state.ruolo == "docente":
                 "Salto in lungo da fermo (cm)",
                 "Addominali in 1 minuto (ripetizioni)"
             ])
-            valore = st.number_input("Risultato ottenuto (numero):", min_value=0.0, step=1.0)
-            voto_calcolato = calcola_voto(tipo_test, valore)
-
