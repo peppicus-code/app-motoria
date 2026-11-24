@@ -74,21 +74,36 @@ if st.session_state.ruolo is None:
 
     with col2:
         st.subheader("📋 Area Docente")
+        try:
+            res_pwd = supabase.table("impostazioni").select("valore").eq("chiave", "password_docente").execute()
+            password_attuale = res_pwd.data[0]["valore"] if res_pwd.data else st.secrets["PASSWORD_DOCENTE"]
+        except Exception:
+            password_attuale = st.secrets["PASSWORD_DOCENTE"]
+
         pwd_input = st.text_input("Password Docente:", type="password")
         if st.button("Entra come Docente", use_container_width=True):
-            if pwd_input == st.secrets["PASSWORD_DOCENTE"]:
+            if pwd_input == password_attuale:
                 st.session_state.ruolo = "docente"
                 st.rerun()
             else:
                 st.error("Password errata.")
 
-        with st.expander("❓ Hai dimenticato o vuoi cambiare la password?"):
-            st.markdown("""
-            Per motivi di sicurezza la password docente è protetta nelle impostazioni del server:
-            1. Clicca su **Manage app** (in basso a destra) e accedi con il tuo account amministratore.
-            2. Vai su **Settings** (⋮) → **Secrets**.
-            3. Modifica o controlla il valore accanto a `PASSWORD_DOCENTE = "..."` e clicca **Save**.
-            """)
+        with st.expander("🔑 Hai dimenticato o vuoi cambiare la password?"):
+            st.caption("Usa il Codice Segreto (PUK) assegnato al docente per impostare una nuova password:")
+            codice_segreto = st.text_input("Codice Segreto Docente:", type="password", key="puk_doc")
+            nuova_pwd = st.text_input("Nuova Password:", type="password", key="new_pwd_doc")
+            if st.button("Salva Nuova Password", use_container_width=True):
+                if codice_segreto == "202699":
+                    if len(nuova_pwd.strip()) >= 4:
+                        try:
+                            supabase.table("impostazioni").upsert({"chiave": "password_docente", "valore": nuova_pwd.strip()}).execute()
+                            st.success("✅ Password aggiornata! Ora puoi entrare con la nuova password.")
+                        except Exception as e:
+                            st.error(f"Errore nel salvataggio su database: {e}")
+                    else:
+                        st.warning("La nuova password deve avere almeno 4 caratteri.")
+                else:
+                    st.error("❌ Codice Segreto non valido.")
 
 # --- AREA DOCENTE ---
 elif st.session_state.ruolo == "docente":
@@ -199,16 +214,6 @@ elif st.session_state.ruolo == "docente":
         st.header("🩺 Controllo Scadenze Certificati Medici")
         studenti_list = supabase.table("studenti").select("id, nome, cognome, scadenza_certificato, classi(nome)").execute().data
         oggi = date.today()
-        for s in studenti_list:
-            scad = datetime.strptime(s["scadenza_certificato"], "%Y-%m-%d").date()
-            giorni = (scad - oggi).days
-            classe_nome = s["classi"]["nome"] if s["classi"] else ""
-            if giorni < 0:
-                st.error(f"❌ **{s['cognome']} {s['nome']}** ({classe_nome}) - SCADUTO il {scad.strftime('%d/%m/%Y')}")
-            elif giorni <= 30:
-                st.warning(f"⚠️ **{s['cognome']} {s['nome']}** ({classe_nome}) - In scadenza tra {giorni} giorni ({scad.strftime('%d/%m/%Y')})")
-            else:
-                st.success(f"✅ **{s['cognome']} {s['nome']}** ({classe_nome}) - Valido fino al {scad.strftime('%d/%m/%Y')}")
     # 3. TEST FISICI E VOTI
     elif menu == "3. Test Fisici e Voti":
         st.header("⏱️ Registrazione Test Fisici e Calcolo Voti")
