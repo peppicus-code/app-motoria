@@ -209,7 +209,7 @@ elif st.session_state.ruolo == "docente":
         if not studenti_list:
             st.warning("Nessuno studente registrato.")
         else:
-            mappa_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome']})": s["id"] for s in studenti_list}
+            mappa_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in studenti_list}
             stud_scelto = st.selectbox("Seleziona Studente:", list(mappa_stud.keys()))
             tipo_test = st.selectbox("Tipo di Test:", [
                 "Corsa 1000m (secondi)",
