@@ -241,6 +241,7 @@ elif st.session_state.ruolo == "docente":
                                 "codice_personale": codice.strip(),
                                 "scadenza_certificato": str(scad_cert),
                                 "note": note
+                            }).execute()
                             st.session_state.codice_generato = genera_codice_sicuro()
                             st.success(f"Studente {nome} {cognome} inserito!")
                             time.sleep(0.5)
@@ -277,7 +278,6 @@ elif st.session_state.ruolo == "docente":
                         st.rerun()
                 else:
                     st.info("Nessuna classe presente.")
-}).execute()
         st.divider()
         st.subheader("Elenco Studenti Registrati")
         studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
@@ -408,7 +408,6 @@ elif st.session_state.ruolo == "docente":
             if titolo and messaggio:
                 supabase.table("bacheca").insert({"titolo": titolo, "messaggio": messaggio}).execute()
                 st.success("Avviso pubblicato!")
-
     elif menu == "7. Squadre & Segnapunti":
         st.header("⚽ Strumenti Rapidi da Palestra")
         tab_pt, tab_sq = st.tabs(["🔢 Tabellone Segnapunti", "🎲 Sorteggio Squadre"])
@@ -450,3 +449,77 @@ elif st.session_state.ruolo == "docente":
                     st.session_state.punti_b = max(0, st.session_state.punti_b - 1)
                     st.rerun()
 
+            if st.button("🔄 Azzera Punteggio Partita", use_container_width=True):
+                st.session_state.punti_a = 0
+                st.session_state.punti_b = 0
+                st.rerun()
+
+        with tab_sq:
+            st.subheader("Creazione Rapida Squadre")
+            classi_data = supabase.table("classi").select("*").execute().data
+            opzioni_fonte = ["Inserisci nomi manualmente"] + [f"Classe {c['nome']}" for c in classi_data]
+            fonte = st.selectbox("Da dove prendo i giocatori?", opzioni_fonte)
+            giocatori = []
+            if fonte == "Inserisci nomi manualmente":
+                nomi_raw = st.text_area("Scrivi un nome per riga (oppure separati da virgola):", placeholder="Marco\nLuca\nGiulia\nSofia...")
+                if nomi_raw:
+                    giocatori = [n.strip() for n in nomi_raw.replace(",", "\n").split("\n") if n.strip()]
+            else:
+                nome_cl = fonte.replace("Classe ", "")
+                cl_id = next((c["id"] for c in classi_data if c["nome"] == nome_cl), None)
+                if cl_id:
+                    stud_cl = supabase.table("studenti").select("nome, cognome").eq("classe_id", cl_id).execute().data
+                    tutti_nomi = [f"{s['cognome']} {s['nome']}" for s in stud_cl]
+                    giocatori = st.multiselect("Seleziona gli studenti presenti oggi:", tutti_nomi, default=tutti_nomi)
+
+            num_squadre = st.number_input("Numero di squadre da formare:", min_value=2, max_value=10, value=2, step=1)
+            if st.button("🎲 Sorteggia Squadre", type="primary", use_container_width=True):
+                if len(giocatori) < num_squadre:
+                    st.warning("Inserisci almeno tanti giocatori quante sono le squadre!")
+                else:
+                    mescolati = giocatori.copy()
+                    random.shuffle(mescolati)
+                    cols = st.columns(int(num_squadre))
+                    for idx in range(int(num_squadre)):
+                        membri = mescolati[idx::int(num_squadre)]
+                        with cols[idx]:
+                            with st.container(border=True):
+                                st.markdown(f"### Squadra {idx + 1}")
+                                for m in membri:
+                                    st.write(f"• {m}")
+
+elif st.session_state.ruolo == "studente":
+    stud = st.session_state.studente_corrente
+    st.sidebar.title(f"👋 Ciao, {stud['nome']}!")
+    st.sidebar.write(f"Classe: **{stud['classi']['nome'] if stud['classi'] else ''}**")
+    if st.sidebar.button("🚪 Esci", use_container_width=True):
+        st.session_state.ruolo = None
+        st.session_state.studente_corrente = None
+        st.rerun()
+
+    st.title("🎓 Area Personale Studente")
+    scad = datetime.strptime(stud["scadenza_certificato"], "%Y-%m-%d").date()
+    if scad < date.today():
+        st.error(f"⚠️ Il tuo certificato medico è SCADUTO il {scad.strftime('%d/%m/%Y')}. Ricordati di rinnovarlo!")
+    else:
+        st.success(f"✅ Certificato medico valido fino al {scad.strftime('%d/%m/%Y')}")
+
+    tab1, tab2, tab3 = st.tabs(["📊 I Miei Risultati", "🏆 Classifiche Tornei", "📌 Bacheca Avvisi"])
+    with tab1:
+        ris = supabase.table("risultati_test").select("tipo_test, valore, voto, data_test").eq("studente_id", stud["id"]).execute().data
+        if ris:
+            st.dataframe(pd.DataFrame(ris), use_container_width=True)
+        else:
+            st.info("Nessun test fisico registrato finora.")
+    with tab2:
+        tornei_data = supabase.table("tornei").select("nome_torneo, squadra, punti").order("punti", desc=True).execute().data
+        if tornei_data:
+            st.dataframe(pd.DataFrame(tornei_data), use_container_width=True)
+        else:
+            st.info("Nessun torneo attivo al momento.")
+    with tab3:
+        avvisi = supabase.table("bacheca").select("titolo, messaggio, data_creazione").order("data_creazione", desc=True).execute().data
+        for a in avvisi:
+            with st.container(border=True):
+                st.subheader(a["titolo"])
+                st.write(a["messaggio"])
