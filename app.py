@@ -7,7 +7,6 @@ import random
 import string
 from itertools import combinations
 
-# --- CONFIGURAZIONE PAGINA E STILE SPORTIVO ---
 st.set_page_config(page_title="Portale Educazione Motoria", page_icon="🏅", layout="wide")
 
 st.markdown("""
@@ -16,7 +15,6 @@ st.markdown("""
         border-radius: 10px;
         font-weight: 600;
         padding: 0.6rem 1rem;
-        transition: all 0.2s ease;
     }
     .score-card {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -37,7 +35,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CONNESSIONE A SUPABASE ---
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -46,15 +43,12 @@ def init_connection():
 
 supabase = init_connection()
 
-# --- FUNZIONI DI UTILITÀ ---
 def genera_codice_sicuro():
-    """Genera un codice casuale anti-indovinamento per privacy GDPR minori"""
     numeri = ''.join(random.choices(string.digits, k=4))
     lettere = ''.join(random.choices(string.ascii_uppercase, k=2))
     return f"MTR-{numeri}-{lettere}"
 
 def calcola_voto(tipo_test, valore):
-    """Calcolo automatico voti (esempi personalizzabili)"""
     if tipo_test == "Corsa 1000m (secondi)":
         if valore <= 210: return 10.0
         elif valore <= 230: return 9.0
@@ -79,13 +73,11 @@ def calcola_voto(tipo_test, valore):
     return 6.0
 
 def genera_calendario_italiana(squadre, partite_per_squadra, max_partite_totali=None):
-    """Genera abbinamenti equilibrati per tornei all'italiana parziali o completi"""
     tutte_coppie = list(combinations(squadre, 2))
     random.shuffle(tutte_coppie)
     conteggio = {s: 0 for s in squadre}
     partite_scelte = []
 
-    # Ordina le coppie dando priorità alle squadre con meno partite assegnate
     for _ in range(len(tutte_coppie) * 2):
         if max_partite_totali and len(partite_scelte) >= max_partite_totali:
             break
@@ -105,7 +97,6 @@ def genera_calendario_italiana(squadre, partite_per_squadra, max_partite_totali=
 
     return partite_scelte, conteggio
 
-# --- GESTIONE SESSIONE ---
 if "ruolo" not in st.session_state:
     st.session_state.ruolo = None
 if "studente_corrente" not in st.session_state:
@@ -117,17 +108,14 @@ if "punti_b" not in st.session_state:
 if "codice_generato" not in st.session_state:
     st.session_state.codice_generato = genera_codice_sicuro()
 
-# --- SCHERMATA DI ACCESSO ---
 if st.session_state.ruolo is None:
     st.title("🏅 Portale Educazione Motoria")
     st.caption("Piattaforma digitale per la gestione didattica, i test fisici e i tornei scolastici")
-
     col1, col2 = st.columns(2)
 
     with col1:
         with st.container(border=True):
             st.subheader("🎓 Area Studenti")
-            st.write("Consulta i tuoi voti, la validità del certificato medico e le classifiche.")
             codice_input = st.text_input("Codice Personale Studente:", type="password", placeholder="Es. MTR-4821-XK")
             if st.button("Entra come Studente", type="primary", use_container_width=True):
                 res = supabase.table("studenti").select("*, classi(nome)").eq("codice_personale", codice_input.strip()).execute()
@@ -141,7 +129,6 @@ if st.session_state.ruolo is None:
     with col2:
         with st.container(border=True):
             st.subheader("📋 Area Docente")
-            st.write("Accesso riservato all'insegnante (compatibile con Face ID / Impronta del telefono).")
             pwd_input = st.text_input("Password Docente:", type="password")
             if st.button("Entra come Docente", type="primary", use_container_width=True):
                 if pwd_input == st.secrets["PASSWORD_DOCENTE"]:
@@ -151,12 +138,8 @@ if st.session_state.ruolo is None:
                     st.error("Password errata.")
 
     with st.expander("🔒 Informativa Sicurezza & Privacy Minori (GDPR)"):
-        st.info(
-            "• **Tutela Dati Minori:** I codici studente sono alfanumerici casuali non deducibili dal cognome.\n"
-            "• **Accesso Biometrico:** Salvando la password docente nel portachiavi di iPhone/Android (Face ID o Impronta), l'accesso risulta protetto biometricamente."
-        )
+        st.info("• **Tutela Dati Minori:** Codici casuali anti-indovinamento.\n• **Accesso Biometrico:** Compatibile con Face ID / Impronta del telefono.")
 
-# --- AREA DOCENTE ---
 elif st.session_state.ruolo == "docente":
     st.sidebar.title("🏅 Menu Docente")
     menu = st.sidebar.radio("Seleziona sezione:", [
@@ -168,12 +151,10 @@ elif st.session_state.ruolo == "docente":
         "6. Bacheca Avvisi",
         "7. Squadre & Segnapunti"
     ])
-    st.sidebar.divider()
     if st.sidebar.button("🚪 Esci (Logout)", use_container_width=True):
         st.session_state.ruolo = None
         st.rerun()
 
-    # 1. CLASSI E STUDENTI
     if menu == "1. Classi e Studenti":
         st.header("🏫 Gestione Classi e Studenti")
         tab1, tab2, tab3 = st.tabs(["➕ Aggiungi Classe", "➕ Aggiungi Studente", "🗑️ Elimina"])
@@ -185,7 +166,7 @@ elif st.session_state.ruolo == "docente":
                     try:
                         supabase.table("classi").insert({"nome": nuova_classe.strip()}).execute()
                         st.success(f"Classe {nuova_classe} creata!")
-                        time.sleep(0.6)
+                        time.sleep(0.5)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Errore: {e}")
@@ -200,15 +181,13 @@ elif st.session_state.ruolo == "docente":
                 c_n1, c_n2 = st.columns(2)
                 nome = c_n1.text_input("Nome Studente:")
                 cognome = c_n2.text_input("Cognome Studente:")
-
-                c_cod1, c_cod2 = st.columns([3, 1])
-                codice = c_cod1.text_input("Codice Personale Studente (Privacy GDPR):", value=st.session_state.codice_generato)
+                c_cod1, c_cod2 = st.columns()
+                codice = c_cod1.text_input("Codice Privacy Studente:", value=st.session_state.codice_generato)
                 if c_cod2.button("🔄 Nuovo Codice", use_container_width=True):
                     st.session_state.codice_generato = genera_codice_sicuro()
                     st.rerun()
-
                 scad_cert = st.date_input("Scadenza Certificato Medico:", value=date.today())
-                note = st.text_area("Note riservate docente (es. esoneri parziali):")
+                note = st.text_area("Note riservate docente:")
 
                 if st.button("Salva Studente", type="primary"):
                     if nome and cognome and codice:
@@ -223,7 +202,7 @@ elif st.session_state.ruolo == "docente":
                             }).execute()
                             st.session_state.codice_generato = genera_codice_sicuro()
                             st.success(f"Studente {nome} {cognome} inserito!")
-                            time.sleep(0.6)
+                            time.sleep(0.5)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Errore: {e}")
@@ -237,3 +216,192 @@ elif st.session_state.ruolo == "docente":
                     mappa_del_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in stud_del_list}
                     stud_da_elim = st.selectbox("Scegli studente:", list(mappa_del_stud.keys()))
                     if st.button("🗑️ Elimina Studente", type="primary"):
+                        supabase.table("studenti").delete().eq("id", mappa_del_stud[stud_da_elim]).execute()
+                        st.success("Studente eliminato!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.info("Nessuno studente presente.")
+
+            with col_del2:
+                st.subheader("Elimina Classe")
+                classi_del_list = supabase.table("classi").select("*").execute().data
+                if classi_del_list:
+                    mappa_del_classi = {c["nome"]: c["id"] for c in classi_del_list}
+                    classe_da_elim = st.selectbox("Scegli classe:", list(mappa_del_classi.keys()))
+                    if st.button("🗑️ Elimina Classe", type="primary"):
+                        supabase.table("classi").delete().eq("id", mappa_del_classi[classe_da_elim]).execute()
+                        st.success("Classe eliminata!")
+                        time.sleep(0.5)
+        st.divider()
+        st.subheader("Elenco Studenti Registrati")
+        studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
+        if studenti_list:
+            df = pd.DataFrame([{
+                "Classe": s["classi"]["nome"] if s["classi"] else "",
+                "Cognome": s["cognome"],
+                "Nome": s["nome"],
+                "Codice Privacy": s["codice_personale"],
+                "Scadenza Certificato": s["scadenza_certificato"],
+                "Note": s["note"]
+            } for s in studenti_list])
+            st.dataframe(df, use_container_width=True)
+
+    elif menu == "2. Certificati Medici":
+        st.header("🩺 Controllo Scadenze Certificati Medici")
+        studenti_list = supabase.table("studenti").select("id, nome, cognome, scadenza_certificato, classi(nome)").execute().data
+        if not studenti_list:
+            st.info("Nessuno studente registrato.")
+        else:
+            oggi = date.today()
+            for s in studenti_list:
+                scad = datetime.strptime(s["scadenza_certificato"], "%Y-%m-%d").date()
+                giorni = (scad - oggi).days
+                classe_nome = s["classi"]["nome"] if s["classi"] else ""
+                if giorni < 0:
+                    st.error(f"❌ **{s['cognome']} {s['nome']}** ({classe_nome}) — SCADUTO il {scad.strftime('%d/%m/%Y')}")
+                elif giorni <= 30:
+                    st.warning(f"⚠️ **{s['cognome']} {s['nome']}** ({classe_nome}) — In scadenza tra {giorni} giorni ({scad.strftime('%d/%m/%Y')})")
+                else:
+                    st.success(f"✅ **{s['cognome']} {s['nome']}** ({classe_nome}) — Valido fino al {scad.strftime('%d/%m/%Y')}")
+
+    elif menu == "3. Test Fisici e Voti":
+        st.header("⏱️ Registrazione Test Fisici e Calcolo Voti")
+        studenti_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
+        if not studenti_list:
+            st.warning("Nessuno studente registrato.")
+        else:
+            mappa_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in studenti_list}
+            stud_scelto = st.selectbox("Seleziona Studente:", list(mappa_stud.keys()))
+            tipo_test = st.selectbox("Tipo di Test:", [
+                "Corsa 1000m (secondi)",
+                "Salto in lungo da fermo (cm)",
+                "Addominali in 1 minuto (ripetizioni)"
+            ])
+            valore = st.number_input("Risultato ottenuto (numero):", min_value=0.0, step=1.0)
+            voto_calcolato = calcola_voto(tipo_test, valore)
+            st.info(f"📊 Voto calcolato automaticamente: **{voto_calcolato}**")
+
+            if st.button("Registra Risultato", type="primary"):
+                supabase.table("risultati_test").insert({
+                    "studente_id": mappa_stud[stud_scelto],
+                    "tipo_test": tipo_test,
+                    "valore": valore,
+                    "voto": voto_calcolato
+                }).execute()
+                st.success("Risultato e voto salvati!")
+
+    elif menu == "4. Cronometro / Timer":
+        st.header("⏱️ Timer per Circuiti e Prove")
+        secondi = st.number_input("Imposta durata Timer (secondi):", min_value=5, max_value=3600, value=30, step=5)
+        if st.button("▶️ Avvia Countdown", type="primary"):
+            placeholder = st.empty()
+            for t in range(int(secondi), -1, -1):
+                mins, secs = divmod(t, 60)
+                placeholder.markdown(f"<h1 style='text-align: center; font-size: 85px; color: #10b981;'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
+                time.sleep(1)
+            st.balloons()
+            st.success("Tempo scaduto!")
+
+    elif menu == "5. Tornei & Generatore Partite":
+        st.header("🏆 Tornei Scolastici e Generatore Partite")
+        tab_gen, tab_class = st.tabs(["📅 Generatore Torneo all'Italiana", "📊 Classifica Pubblica"])
+
+        with tab_gen:
+            st.subheader("Generatore Automatico Abbinamenti")
+            classi_db = supabase.table("classi").select("nome").execute().data
+            nomi_db = [c["nome"] for c in classi_db]
+
+            usa_db = st.checkbox("Usa le classi già salvate nel database", value=bool(nomi_db))
+            if usa_db and nomi_db:
+                squadre_torneo = st.multiselect("Seleziona le classi iscritte al torneo:", nomi_db, default=nomi_db)
+            else:
+                testo_squadre = st.text_area("Scrivi le classi/squadre partecipanti (una per riga o separate da virgola):", value="1A, 1B, 2A, 2B, 3A, 3B")
+                squadre_torneo = [s.strip() for s in testo_squadre.replace(",", "\n").split("\n") if s.strip()]
+
+            col_p1, col_p2 = st.columns(2)
+            max_per_squadra = col_p1.number_input("Quante partite deve giocare ogni classe?", min_value=1, max_value=20, value=2, step=1)
+            limita_tot = col_p2.checkbox("Imposta un tetto massimo totale di partite", value=False)
+            max_totali = None
+            if limita_tot:
+                max_totali = col_p2.number_input("Numero massimo totale di partite da disputare:", min_value=1, max_value=100, value=6, step=1)
+
+            if st.button("⚡ Genera Calendario Partite", type="primary", use_container_width=True):
+                if len(squadre_torneo) < 2:
+                    st.warning("Inserisci almeno 2 classi per generare il calendario!")
+                else:
+                    partite, bilancio = genera_calendario_italiana(squadre_torneo, int(max_per_squadra), int(max_totali) if max_totali else None)
+                    st.success(f"Generate **{len(partite)} partite** equilibrate!")
+                    for i, (sq1, sq2) in enumerate(partite, 1):
+                        st.markdown(f"<div class='match-card'><b>Partita #{i}:</b> &nbsp; {sq1} &nbsp; 🆚 &nbsp; {sq2}</div>", unsafe_allow_html=True)
+                    with st.expander("📋 Riepilogo partite assegnate per ciascuna classe"):
+                        df_bil = pd.DataFrame([{"Classe": k, "Partite assegnate": v} for k, v in bilancio.items()])
+                        st.dataframe(df_bil, use_container_width=True)
+
+        with tab_class:
+            st.subheader("Aggiorna Classifica Visibile agli Studenti")
+            nome_torneo = st.text_input("Nome Torneo:")
+            squadra = st.text_input("Nome Squadra / Classe:")
+            punti = st.number_input("Punti in classifica:", min_value=0, step=1)
+            if st.button("Salva Punteggio in Classifica", type="primary"):
+                if nome_torneo and squadra:
+                    supabase.table("tornei").insert({
+                        "nome_torneo": nome_torneo.strip(),
+                        "squadra": squadra.strip(),
+                        "punti": int(punti)
+                    }).execute()
+                    st.success("Dati torneo salvati!")
+            tornei_data = supabase.table("tornei").select("*").order("punti", desc=True).execute().data
+            if tornei_data:
+                st.dataframe(pd.DataFrame(tornei_data)[["nome_torneo", "squadra", "punti"]], use_container_width=True)
+
+    elif menu == "6. Bacheca Avvisi":
+        st.header("📌 Pubblica Avviso in Bacheca")
+        titolo = st.text_input("Titolo Avviso:")
+        messaggio = st.text_area("Testo del messaggio per gli studenti:")
+        if st.button("Pubblica Avviso", type="primary"):
+            if titolo and messaggio:
+                supabase.table("bacheca").insert({"titolo": titolo, "messaggio": messaggio}).execute()
+                st.success("Avviso pubblicato!")
+
+    elif menu == "7. Squadre & Segnapunti":
+        st.header("⚽ Strumenti Rapidi da Palestra")
+        tab_pt, tab_sq = st.tabs(["🔢 Tabellone Segnapunti", "🎲 Sorteggio Squadre"])
+
+        with tab_pt:
+            col_n1, col_n2 = st.columns(2)
+            nome_a = col_n1.text_input("Nome Squadra 1:", value="Squadra Casa")
+            nome_b = col_n2.text_input("Nome Squadra 2:", value="Squadra Ospite")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"<div class='score-card'><h3>{nome_a}</h3><h1 style='font-size: 95px; color: #38bdf8; margin: 10px 0;'>{st.session_state.punti_a}</h1></div>", unsafe_allow_html=True)
+                b1, b2, b3, b4 = st.columns(4)
+                if b1.button("+1", key="a1", use_container_width=True):
+                    st.session_state.punti_a += 1
+                    st.rerun()
+                if b2.button("+2", key="a2", use_container_width=True):
+                    st.session_state.punti_a += 2
+                    st.rerun()
+                if b3.button("+3", key="a3", use_container_width=True):
+                    st.session_state.punti_a += 3
+                    st.rerun()
+                if b4.button("-1", key="am1", use_container_width=True):
+                    st.session_state.punti_a = max(0, st.session_state.punti_a - 1)
+                    st.rerun()
+
+            with c2:
+                st.markdown(f"<div class='score-card'><h3>{nome_b}</h3><h1 style='font-size: 95px; color: #f87171; margin: 10px 0;'>{st.session_state.punti_b}</h1></div>", unsafe_allow_html=True)
+                b1, b2, b3, b4 = st.columns(4)
+                if b1.button("+1", key="b1", use_container_width=True):
+                    st.session_state.punti_b += 1
+                    st.rerun()
+                if b2.button("+2", key="b2", use_container_width=True):
+                    st.session_state.punti_b += 2
+                    st.rerun()
+                if b3.button("+3", key="b3", use_container_width=True):
+                    st.session_state.punti_b += 3
+                    st.rerun()
+                if b4.button("-1", key="bm1", use_container_width=True):
+                    st.session_state.punti_b = max(0, st.session_state.punti_b - 1)
+                    st.rerun()
+
