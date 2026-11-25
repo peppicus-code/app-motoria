@@ -240,6 +240,8 @@ elif st.session_state.ruolo == "docente":
                                 "cognome": cognome.strip(),
                                 "codice_personale": codice.strip(),
                                 "scadenza_certificato": str(scad_cert),
+                                "note": note
+                            }).execute()
         st.divider()
         st.subheader("Elenco Studenti Registrati")
         studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
