@@ -161,6 +161,24 @@ if st.session_state.ruolo is None:
                 else:
                     st.error("Password errata.")
 
+    with st.expander("🔑 Password o Codice dimenticato?"):
+        tab_rec_stud, tab_rec_doc = st.tabs(["🎓 Recupero Studente", "📋 Recupero Docente"])
+        with tab_rec_stud:
+            st.info(
+                "**Hai smarrito il tuo Codice Personale?**\n\n"
+                "Per tutelare la privacy dei minori (GDPR), i codici non vengono inviati via email. "
+                "Chiedi direttamente al tuo **docente di Educazione Fisica**: potrà consultarlo o generartene uno nuovo in pochi secondi."
+            )
+        with tab_rec_doc:
+            st.write("Inserisci il **Codice PUK di emergenza** per recuperare la password docente:")
+            puk_input = st.text_input("Codice PUK di Emergenza:", type="password", key="puk_rec")
+            if st.button("Verifica PUK", key="btn_puk"):
+                codice_puk = st.secrets.get("PUK_DOCENTE", "PUK2026")
+                if puk_input == codice_puk:
+                    st.success(f"✅ Identità verificata! La password docente attuale è: **{st.secrets['PASSWORD_DOCENTE']}**")
+                else:
+                    st.error("Codice PUK non valido.")
+
     with st.expander("🔒 Informativa Sicurezza & Privacy Minori (GDPR)"):
         st.info("• **Tutela Dati Minori:** Codici casuali anti-indovinamento.\n• **Accesso Biometrico:** Compatibile con Face ID / Impronta del telefono.")
 
@@ -222,26 +240,6 @@ elif st.session_state.ruolo == "docente":
                                 "cognome": cognome.strip(),
                                 "codice_personale": codice.strip(),
                                 "scadenza_certificato": str(scad_cert),
-                                "note": note
-                            }).execute()
-                            st.session_state.codice_generato = genera_codice_sicuro()
-                            st.success(f"Studente {nome} {cognome} inserito!")
-                            time.sleep(0.5)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Errore: {e}")
-
-        with tab3:
-            col_del1, col_del2 = st.columns(2)
-            with col_del1:
-                st.subheader("Elimina Studente")
-                stud_del_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
-                if stud_del_list:
-                    mappa_del_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in stud_del_list}
-                    stud_da_elim = st.selectbox("Scegli studente:", list(mappa_del_stud.keys()))
-                    if st.button("🗑️ Elimina Studente", type="primary"):
-                        supabase.table("studenti").delete().eq("id", mappa_del_stud[stud_da_elim]).execute()
-                        st.success("Studente eliminato!")
         st.divider()
         st.subheader("Elenco Studenti Registrati")
         studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
