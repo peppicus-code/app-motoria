@@ -7,30 +7,49 @@ import random
 import string
 from itertools import combinations
 
-st.set_page_config(page_title="Portale Educazione Motoria", page_icon="🏅", layout="wide")
+st.set_page_config(page_title="MotoriaPro • Portale Educazione Fisica", page_icon="🏅", layout="wide")
 
 st.markdown("""
 <style>
+    .stApp { background-color: #F4F7FA; }
+    .hero-banner {
+        background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%);
+        padding: 24px 28px;
+        border-radius: 16px;
+        color: white;
+        margin-bottom: 24px;
+        box-shadow: 0 8px 20px rgba(0, 82, 204, 0.18);
+    }
+    .hero-banner h1 { color: white !important; margin: 0; font-size: 2rem; font-weight: 800; }
+    .hero-banner p { color: #DEEBFF; margin: 6px 0 0 0; font-size: 1rem; }
     .stButton > button {
-        border-radius: 10px;
-        font-weight: 600;
-        padding: 0.6rem 1rem;
+        border-radius: 12px;
+        font-weight: 700;
+        padding: 0.65rem 1.2rem;
+        border: none;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.08);
     }
     .score-card {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border-radius: 16px;
-        padding: 20px;
+        background: #FFFFFF;
+        border-radius: 18px;
+        padding: 24px;
         text-align: center;
-        border: 2px solid #334155;
-        color: white;
+        border-top: 6px solid #0052CC;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+        color: #0F172A;
     }
     .match-card {
-        background-color: #1e293b;
-        border-left: 5px solid #10b981;
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        color: #f8fafc;
+        background-color: #FFFFFF;
+        border-left: 6px solid #FF6B00;
+        padding: 14px 18px;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        color: #1E293B;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+    }
+    section[data-testid="stSidebar"] {
+        background-color: #FFFFFF;
+        border-right: 1px solid #E2E8F0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -84,16 +103,16 @@ def genera_calendario_italiana(squadre, partite_per_squadra, max_partite_totali=
         candidati = [
             c for c in tutte_coppie
             if c not in partite_scelte
-            and conteggio[c] < partite_per_squadra
-            and conteggio[c] < partite_per_squadra
+            and conteggio[c[0]] < partite_per_squadra
+            and conteggio[c[1]] < partite_per_squadra
         ]
         if not candidati:
             break
-        candidati.sort(key=lambda c: conteggio[c] + conteggio[c])
-        scelta = candidati
+        candidati.sort(key=lambda c: conteggio[c[0]] + conteggio[c[1]])
+        scelta = candidati[0]
         partite_scelte.append(scelta)
-        conteggio[scelta] += 1
-        conteggio[scelta] += 1
+        conteggio[scelta[0]] += 1
+        conteggio[scelta[1]] += 1
 
     return partite_scelte, conteggio
 
@@ -109,8 +128,13 @@ if "codice_generato" not in st.session_state:
     st.session_state.codice_generato = genera_codice_sicuro()
 
 if st.session_state.ruolo is None:
-    st.title("🏅 Portale Educazione Motoria")
-    st.caption("Piattaforma digitale per la gestione didattica, i test fisici e i tornei scolastici")
+    st.markdown("""
+    <div class="hero-banner">
+        <h1>🏅 MotoriaPro • Educazione Fisica</h1>
+        <p>Gestione classi, certificati medici, test fisici e tornei scolastici in un unico posto</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -121,7 +145,7 @@ if st.session_state.ruolo is None:
                 res = supabase.table("studenti").select("*, classi(nome)").eq("codice_personale", codice_input.strip()).execute()
                 if res.data:
                     st.session_state.ruolo = "studente"
-                    st.session_state.studente_corrente = res.data
+                    st.session_state.studente_corrente = res.data[0]
                     st.rerun()
                 else:
                     st.error("Codice personale non valido.")
@@ -141,7 +165,7 @@ if st.session_state.ruolo is None:
         st.info("• **Tutela Dati Minori:** Codici casuali anti-indovinamento.\n• **Accesso Biometrico:** Compatibile con Face ID / Impronta del telefono.")
 
 elif st.session_state.ruolo == "docente":
-    st.sidebar.title("🏅 Menu Docente")
+    st.sidebar.title("🏅 MotoriaPro")
     menu = st.sidebar.radio("Seleziona sezione:", [
         "1. Classi e Studenti",
         "2. Certificati Medici",
@@ -218,21 +242,6 @@ elif st.session_state.ruolo == "docente":
                     if st.button("🗑️ Elimina Studente", type="primary"):
                         supabase.table("studenti").delete().eq("id", mappa_del_stud[stud_da_elim]).execute()
                         st.success("Studente eliminato!")
-                        time.sleep(0.5)
-                        st.rerun()
-                else:
-                    st.info("Nessuno studente presente.")
-
-            with col_del2:
-                st.subheader("Elimina Classe")
-                classi_del_list = supabase.table("classi").select("*").execute().data
-                if classi_del_list:
-                    mappa_del_classi = {c["nome"]: c["id"] for c in classi_del_list}
-                    classe_da_elim = st.selectbox("Scegli classe:", list(mappa_del_classi.keys()))
-                    if st.button("🗑️ Elimina Classe", type="primary"):
-                        supabase.table("classi").delete().eq("id", mappa_del_classi[classe_da_elim]).execute()
-                        st.success("Classe eliminata!")
-                        time.sleep(0.5)
         st.divider()
         st.subheader("Elenco Studenti Registrati")
         studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
@@ -298,7 +307,7 @@ elif st.session_state.ruolo == "docente":
             placeholder = st.empty()
             for t in range(int(secondi), -1, -1):
                 mins, secs = divmod(t, 60)
-                placeholder.markdown(f"<h1 style='text-align: center; font-size: 85px; color: #10b981;'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
+                placeholder.markdown(f"<h1 style='text-align: center; font-size: 85px; color: #0052CC;'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
                 time.sleep(1)
             st.balloons()
             st.success("Tempo scaduto!")
@@ -374,7 +383,7 @@ elif st.session_state.ruolo == "docente":
             nome_b = col_n2.text_input("Nome Squadra 2:", value="Squadra Ospite")
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown(f"<div class='score-card'><h3>{nome_a}</h3><h1 style='font-size: 95px; color: #38bdf8; margin: 10px 0;'>{st.session_state.punti_a}</h1></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='score-card'><h3>{nome_a}</h3><h1 style='font-size: 95px; color: #0052CC; margin: 10px 0;'>{st.session_state.punti_a}</h1></div>", unsafe_allow_html=True)
                 b1, b2, b3, b4 = st.columns(4)
                 if b1.button("+1", key="a1", use_container_width=True):
                     st.session_state.punti_a += 1
@@ -390,7 +399,7 @@ elif st.session_state.ruolo == "docente":
                     st.rerun()
 
             with c2:
-                st.markdown(f"<div class='score-card'><h3>{nome_b}</h3><h1 style='font-size: 95px; color: #f87171; margin: 10px 0;'>{st.session_state.punti_b}</h1></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='score-card' style='border-top-color: #FF6B00;'><h3>{nome_b}</h3><h1 style='font-size: 95px; color: #FF6B00; margin: 10px 0;'>{st.session_state.punti_b}</h1></div>", unsafe_allow_html=True)
                 b1, b2, b3, b4 = st.columns(4)
                 if b1.button("+1", key="b1", use_container_width=True):
                     st.session_state.punti_b += 1
