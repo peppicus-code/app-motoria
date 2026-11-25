@@ -4,74 +4,35 @@ import pandas as pd
 from datetime import datetime, date
 import time
 import random
-import secrets
 import string
+from itertools import combinations
 
-# --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(
-    page_title="Portale Educazione Motoria",
-    page_icon="🏃‍♂️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# --- CONFIGURAZIONE PAGINA E STILE SPORTIVO ---
+st.set_page_config(page_title="Portale Educazione Motoria", page_icon="🏅", layout="wide")
 
-# --- STILE GRAFICO SPORTIVO & OTTIMIZZAZIONE SMARTPHONE ---
 st.markdown("""
 <style>
-    /* Pulsanti grandi e comodi da smartphone */
-    div.stButton > button {
-        min-height: 54px;
-        font-size: 17px !important;
-        font-weight: 700 !important;
-        border-radius: 12px !important;
-        border: 2px solid #1E88E5;
-        transition: all 0.2s ease-in-out;
-    }
-    div.stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
-    }
-    /* Pulsanti primari (es. azioni principali / elimina) */
-    div.stButton > button[kind="primary"] {
-        background-color: #E53935 !important;
-        border-color: #B71C1C !important;
-        color: white !important;
-    }
-    /* Titoli con accento sportivo */
-    h1, h2, h3 {
-        color: #0D47A1;
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    }
-    /* Card per segnapunti e squadre */
-    .sport-card {
-        background: linear-gradient(135deg, #0D47A1 0%, #1976D2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 16px;
-        text-align: center;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-        margin-bottom: 12px;
-    }
-    .sport-card-b {
-        background: linear-gradient(135deg, #1B5E20 0%, #388E3C 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 16px;
-        text-align: center;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-        margin-bottom: 12px;
-    }
-    .squadra-box {
-        background-color: #F1F8E9;
-        border-left: 6px solid #2E7D32;
-        padding: 14px;
+    .stButton > button {
         border-radius: 10px;
-        margin-bottom: 10px;
-        color: #1B5E20;
+        font-weight: 600;
+        padding: 0.6rem 1rem;
+        transition: all 0.2s ease;
     }
-    /* Input più leggibili su mobile */
-    input, select, textarea {
-        font-size: 16px !important;
+    .score-card {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border-radius: 16px;
+        padding: 20px;
+        text-align: center;
+        border: 2px solid #334155;
+        color: white;
+    }
+    .match-card {
+        background-color: #1e293b;
+        border-left: 5px solid #10b981;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        color: #f8fafc;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -85,21 +46,15 @@ def init_connection():
 
 supabase = init_connection()
 
-# --- FUNZIONI DI UTILITÀ & SICUREZZA ---
-def genera_codice_sicuro(lunghezza=8):
-    """Genera un codice casuale crittograficamente sicuro per tutelare la privacy dei minori."""
-    # Esclude caratteri ambigui (0, O, 1, I, L) per evitare errori di lettura su smartphone
-    alfabeto = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-    return "".join(secrets.choice(alfabeto) for _ in range(lunghezza))
-
-def maschera_codice(codice):
-    """Mostra solo i primi 2 e gli ultimi 2 caratteri del codice nella tabella generale."""
-    if not codice or len(codice) < 4:
-        return "****"
-    return f"{codice[:2]}****{codice[-2:]}"
+# --- FUNZIONI DI UTILITÀ ---
+def genera_codice_sicuro():
+    """Genera un codice casuale anti-indovinamento per privacy GDPR minori"""
+    numeri = ''.join(random.choices(string.digits, k=4))
+    lettere = ''.join(random.choices(string.ascii_uppercase, k=2))
+    return f"MTR-{numeri}-{lettere}"
 
 def calcola_voto(tipo_test, valore):
-    """Calcolo automatico voti (personalizzabile)"""
+    """Calcolo automatico voti (esempi personalizzabili)"""
     if tipo_test == "Corsa 1000m (secondi)":
         if valore <= 210: return 10.0
         elif valore <= 230: return 9.0
@@ -123,90 +78,32 @@ def calcola_voto(tipo_test, valore):
         else: return 5.0
     return 6.0
 
-def genera_torneo_italiana(squadre, partite_per_squadra, totale_partite):
-    """
-    Genera gli abbinamenti per un torneo all'italiana parziale o completo,
-    bilanciando gli incontri ed evitando che una squadra giochi due volte di fila.
-    """
-    n = len(squadre)
-    if n < 2:
-        return None, "Inserisci almeno 2 classi/squadre partecipanti."
-    if n * partite_per_squadra != 2 * totale_partite:
-        return None, (
-            f"Impossibile bilanciare il calendario: {n} squadre × {partite_per_squadra} partite a testa "
-            f"richiedono {(n * partite_per_squadra) / 2:g} partite totali (hai inserito {totale_partite})."
-        )
-    if partite_per_squadra > n - 1:
-        # Se ci sono più partite del girone singolo, consente andata/ritorno
-        moltiplicatore = (partite_per_squadra // (n - 1)) + 1
-    else:
-        moltiplicatore = 1
+def genera_calendario_italiana(squadre, partite_per_squadra, max_partite_totali=None):
+    """Genera abbinamenti equilibrati per tornei all'italiana parziali o completi"""
+    tutte_coppie = list(combinations(squadre, 2))
+    random.shuffle(tutte_coppie)
+    conteggio = {s: 0 for s in squadre}
+    partite_scelte = []
 
-    # Tentativi multipli per trovare un ordine senza partite consecutive per la stessa squadra
-    for _ in range(300):
-        conteggio = {s: 0 for s in squadre}
-        sfide_usate = {}
-        calendario = []
-        possibile = True
+    # Ordina le coppie dando priorità alle squadre con meno partite assegnate
+    for _ in range(len(tutte_coppie) * 2):
+        if max_partite_totali and len(partite_scelte) >= max_partite_totali:
+            break
+        candidati = [
+            c for c in tutte_coppie
+            if c not in partite_scelte
+            and conteggio[c] < partite_per_squadra
+            and conteggio[c] < partite_per_squadra
+        ]
+        if not candidati:
+            break
+        candidati.sort(key=lambda c: conteggio[c] + conteggio[c])
+        scelta = candidati
+        partite_scelte.append(scelta)
+        conteggio[scelta] += 1
+        conteggio[scelta] += 1
 
-        for turno in range(totale_partite):
-            ultima_partita = calendario[-1] if calendario else (None, None)
-            # Ordina le squadre dando priorità a chi ha giocato meno partite
-            ordinate = squadre.copy()
-            random.shuffle(ordinate)
-            ordinate.sort(key=lambda x: conteggio[x])
-
-            abbinamento_trovato = None
-            for i in range(n):
-                s1 = ordinate[i]
-                if conteggio[s1] >= partite_per_squadra:
-                    continue
-                for j in range(i + 1, n):
-                    s2 = ordinate[j]
-                    if conteggio[s2] >= partite_per_squadra:
-                        continue
-                    chiave = tuple(sorted((s1, s2)))
-                    if sfide_usate.get(chiave, 0) >= moltiplicatore:
-                        continue
-                    # Evita che una squadra giochi due partite consecutive se ci sono alternative
-                    if s1 not in ultima_partita and s2 not in ultima_partita:
-                        abbinamento_trovato = (s1, s2)
-                        break
-                if abbinamento_trovato:
-                    break
-
-            # Fallback se negli ultimi turni è inevitabile giocare di seguito
-            if not abbinamento_trovato:
-                for i in range(n):
-                    s1 = ordinate[i]
-                    if conteggio[s1] >= partite_per_squadra:
-                        continue
-                    for j in range(i + 1, n):
-                        s2 = ordinate[j]
-                        if conteggio[s2] >= partite_per_squadra:
-                            continue
-                        chiave = tuple(sorted((s1, s2)))
-                        if sfide_usate.get(chiave, 0) < moltiplicatore:
-                            abbinamento_trovato = (s1, s2)
-                            break
-                    if abbinamento_trovato:
-                        break
-
-            if not abbinamento_trovato:
-                possibile = False
-                break
-
-            s1, s2 = abbinamento_trovato
-            calendario.append((s1, s2))
-            conteggio[s1] += 1
-            conteggio[s2] += 1
-            chiave = tuple(sorted((s1, s2)))
-            sfide_usate[chiave] = sfide_usate.get(chiave, 0) + 1
-
-        if possibile and len(calendario) == totale_partite:
-            return calendario, None
-
-    return None, "Non è stato possibile generare una combinazione valida con questi vincoli. Prova a modificare i numeri."
+    return partite_scelte, conteggio
 
 # --- GESTIONE SESSIONE ---
 if "ruolo" not in st.session_state:
@@ -217,42 +114,126 @@ if "punti_a" not in st.session_state:
     st.session_state.punti_a = 0
 if "punti_b" not in st.session_state:
     st.session_state.punti_b = 0
-if "squadre_generate" not in st.session_state:
-    st.session_state.squadre_generate = []
-if "calendario_generato" not in st.session_state:
-    st.session_state.calendario_generato = []
-if "codice_proposto" not in st.session_state:
-    st.session_state.codice_proposto = genera_codice_sicuro()
+if "codice_generato" not in st.session_state:
+    st.session_state.codice_generato = genera_codice_sicuro()
 
 # --- SCHERMATA DI ACCESSO ---
 if st.session_state.ruolo is None:
-    st.title("🏃‍♂️ Portale Educazione Motoria")
-    st.markdown("Seleziona la modalità di accesso:")
+    st.title("🏅 Portale Educazione Motoria")
+    st.caption("Piattaforma digitale per la gestione didattica, i test fisici e i tornei scolastici")
+
     col1, col2 = st.columns(2)
+
     with col1:
-        st.subheader("🎓 Area Studenti")
-        codice_input = st.text_input("Inserisci il tuo Codice Personale:", type="password")
-        if st.button("Entra come Studente", use_container_width=True):
-            res = supabase.table("studenti").select("*, classi(nome)").eq("codice_personale", codice_input.strip().upper()).execute()
-            if res.data:
-                st.session_state.ruolo = "studente"
-                st.session_state.studente_corrente = res.data[0]
-                st.rerun()
-            else:
-                st.error("Codice personale non valido.")
+        with st.container(border=True):
+            st.subheader("🎓 Area Studenti")
+            st.write("Consulta i tuoi voti, la validità del certificato medico e le classifiche.")
+            codice_input = st.text_input("Codice Personale Studente:", type="password", placeholder="Es. MTR-4821-XK")
+            if st.button("Entra come Studente", type="primary", use_container_width=True):
+                res = supabase.table("studenti").select("*, classi(nome)").eq("codice_personale", codice_input.strip()).execute()
+                if res.data:
+                    st.session_state.ruolo = "studente"
+                    st.session_state.studente_corrente = res.data
+                    st.rerun()
+                else:
+                    st.error("Codice personale non valido.")
+
     with col2:
-        st.subheader("📋 Area Docente")
-        try:
-            res_pwd = supabase.table("impostazioni").select("valore").eq("chiave", "password_docente").execute()
-            password_attuale = res_pwd.data[0]["valore"] if res_pwd.data else st.secrets["PASSWORD_DOCENTE"]
-        except Exception:
-            password_attuale = st.secrets["PASSWORD_DOCENTE"]
-        pwd_input = st.text_input("Password Docente:", type="password")
-        if st.button("Entra come Docente", use_container_width=True):
-            if pwd_input == password_attuale:
-                st.session_state.ruolo = "docente"
-                st.rerun()
+        with st.container(border=True):
+            st.subheader("📋 Area Docente")
+            st.write("Accesso riservato all'insegnante (compatibile con Face ID / Impronta del telefono).")
+            pwd_input = st.text_input("Password Docente:", type="password")
+            if st.button("Entra come Docente", type="primary", use_container_width=True):
+                if pwd_input == st.secrets["PASSWORD_DOCENTE"]:
+                    st.session_state.ruolo = "docente"
+                    st.rerun()
+                else:
+                    st.error("Password errata.")
+
+    with st.expander("🔒 Informativa Sicurezza & Privacy Minori (GDPR)"):
+        st.info(
+            "• **Tutela Dati Minori:** I codici studente sono alfanumerici casuali non deducibili dal cognome.\n"
+            "• **Accesso Biometrico:** Salvando la password docente nel portachiavi di iPhone/Android (Face ID o Impronta), l'accesso risulta protetto biometricamente."
+        )
+
+# --- AREA DOCENTE ---
+elif st.session_state.ruolo == "docente":
+    st.sidebar.title("🏅 Menu Docente")
+    menu = st.sidebar.radio("Seleziona sezione:", [
+        "1. Classi e Studenti",
+        "2. Certificati Medici",
+        "3. Test Fisici e Voti",
+        "4. Cronometro / Timer",
+        "5. Tornei & Generatore Partite",
+        "6. Bacheca Avvisi",
+        "7. Squadre & Segnapunti"
+    ])
+    st.sidebar.divider()
+    if st.sidebar.button("🚪 Esci (Logout)", use_container_width=True):
+        st.session_state.ruolo = None
+        st.rerun()
+
+    # 1. CLASSI E STUDENTI
+    if menu == "1. Classi e Studenti":
+        st.header("🏫 Gestione Classi e Studenti")
+        tab1, tab2, tab3 = st.tabs(["➕ Aggiungi Classe", "➕ Aggiungi Studente", "🗑️ Elimina"])
+
+        with tab1:
+            nuova_classe = st.text_input("Nome nuova classe (es. 3A, 4B):")
+            if st.button("Crea Classe", type="primary"):
+                if nuova_classe:
+                    try:
+                        supabase.table("classi").insert({"nome": nuova_classe.strip()}).execute()
+                        st.success(f"Classe {nuova_classe} creata!")
+                        time.sleep(0.6)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Errore: {e}")
+
+        with tab2:
+            classi_data = supabase.table("classi").select("*").execute().data
+            if not classi_data:
+                st.warning("Crea prima almeno una classe!")
             else:
-                st.error("Password errata.")
-        with st.expander("🔑 Hai dimenticato o vuoi cambiare la password?"):
-            st.caption("Usa il Codice Segreto (PUK) assegnato al docente per impostare una nuova password:")
+                mappa_classi = {c["nome"]: c["id"] for c in classi_data}
+                classe_scelta = st.selectbox("Seleziona Classe:", list(mappa_classi.keys()))
+                c_n1, c_n2 = st.columns(2)
+                nome = c_n1.text_input("Nome Studente:")
+                cognome = c_n2.text_input("Cognome Studente:")
+
+                c_cod1, c_cod2 = st.columns([3, 1])
+                codice = c_cod1.text_input("Codice Personale Studente (Privacy GDPR):", value=st.session_state.codice_generato)
+                if c_cod2.button("🔄 Nuovo Codice", use_container_width=True):
+                    st.session_state.codice_generato = genera_codice_sicuro()
+                    st.rerun()
+
+                scad_cert = st.date_input("Scadenza Certificato Medico:", value=date.today())
+                note = st.text_area("Note riservate docente (es. esoneri parziali):")
+
+                if st.button("Salva Studente", type="primary"):
+                    if nome and cognome and codice:
+                        try:
+                            supabase.table("studenti").insert({
+                                "classe_id": mappa_classi[classe_scelta],
+                                "nome": nome.strip(),
+                                "cognome": cognome.strip(),
+                                "codice_personale": codice.strip(),
+                                "scadenza_certificato": str(scad_cert),
+                                "note": note
+                            }).execute()
+                            st.session_state.codice_generato = genera_codice_sicuro()
+                            st.success(f"Studente {nome} {cognome} inserito!")
+                            time.sleep(0.6)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Errore: {e}")
+
+        with tab3:
+            col_del1, col_del2 = st.columns(2)
+            with col_del1:
+                st.subheader("Elimina Studente")
+                stud_del_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
+                if stud_del_list:
+                    mappa_del_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in stud_del_list}
+                    stud_da_elim = st.selectbox("Scegli studente:", list(mappa_del_stud.keys()))
+                    if st.button("🗑️ Elimina Studente", type="primary"):
