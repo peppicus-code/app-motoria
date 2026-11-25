@@ -241,7 +241,43 @@ elif st.session_state.ruolo == "docente":
                                 "codice_personale": codice.strip(),
                                 "scadenza_certificato": str(scad_cert),
                                 "note": note
-                            }).execute()
+                            st.session_state.codice_generato = genera_codice_sicuro()
+                            st.success(f"Studente {nome} {cognome} inserito!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Errore: {e}")
+
+        with tab3:
+            col_del1, col_del2 = st.columns(2)
+            with col_del1:
+                st.subheader("Elimina Studente")
+                stud_del_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
+                if stud_del_list:
+                    mappa_del_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in stud_del_list}
+                    stud_da_elim = st.selectbox("Scegli studente:", list(mappa_del_stud.keys()))
+                    if st.button("🗑️ Elimina Studente", type="primary"):
+                        supabase.table("studenti").delete().eq("id", mappa_del_stud[stud_da_elim]).execute()
+                        st.success("Studente eliminato!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.info("Nessuno studente presente.")
+
+            with col_del2:
+                st.subheader("Elimina Classe")
+                classi_del_list = supabase.table("classi").select("*").execute().data
+                if classi_del_list:
+                    mappa_del_classi = {c["nome"]: c["id"] for c in classi_del_list}
+                    classe_da_elim = st.selectbox("Scegli classe:", list(mappa_del_classi.keys()))
+                    if st.button("🗑️ Elimina Classe", type="primary"):
+                        supabase.table("classi").delete().eq("id", mappa_del_classi[classe_da_elim]).execute()
+                        st.success("Classe eliminata!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.info("Nessuna classe presente.")
+}).execute()
         st.divider()
         st.subheader("Elenco Studenti Registrati")
         studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
