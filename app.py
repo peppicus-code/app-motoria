@@ -4,11 +4,79 @@ import pandas as pd
 from datetime import datetime, date
 import time
 import random
+import secrets
+import string
 
-# Configurazione pagina
-st.set_page_config(page_title="Portale Educazione Motoria", page_icon="🏃‍♂️", layout="wide")
+# --- CONFIGURAZIONE PAGINA ---
+st.set_page_config(
+    page_title="Portale Educazione Motoria",
+    page_icon="🏃‍♂️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Connessione a Supabase
+# --- STILE GRAFICO SPORTIVO & OTTIMIZZAZIONE SMARTPHONE ---
+st.markdown("""
+<style>
+    /* Pulsanti grandi e comodi da smartphone */
+    div.stButton > button {
+        min-height: 54px;
+        font-size: 17px !important;
+        font-weight: 700 !important;
+        border-radius: 12px !important;
+        border: 2px solid #1E88E5;
+        transition: all 0.2s ease-in-out;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
+    }
+    /* Pulsanti primari (es. azioni principali / elimina) */
+    div.stButton > button[kind="primary"] {
+        background-color: #E53935 !important;
+        border-color: #B71C1C !important;
+        color: white !important;
+    }
+    /* Titoli con accento sportivo */
+    h1, h2, h3 {
+        color: #0D47A1;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    /* Card per segnapunti e squadre */
+    .sport-card {
+        background: linear-gradient(135deg, #0D47A1 0%, #1976D2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        margin-bottom: 12px;
+    }
+    .sport-card-b {
+        background: linear-gradient(135deg, #1B5E20 0%, #388E3C 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        margin-bottom: 12px;
+    }
+    .squadra-box {
+        background-color: #F1F8E9;
+        border-left: 6px solid #2E7D32;
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        color: #1B5E20;
+    }
+    /* Input più leggibili su mobile */
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- CONNESSIONE A SUPABASE ---
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -17,9 +85,21 @@ def init_connection():
 
 supabase = init_connection()
 
-# --- FUNZIONI DI UTILITÀ ---
+# --- FUNZIONI DI UTILITÀ & SICUREZZA ---
+def genera_codice_sicuro(lunghezza=8):
+    """Genera un codice casuale crittograficamente sicuro per tutelare la privacy dei minori."""
+    # Esclude caratteri ambigui (0, O, 1, I, L) per evitare errori di lettura su smartphone
+    alfabeto = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alfabeto) for _ in range(lunghezza))
+
+def maschera_codice(codice):
+    """Mostra solo i primi 2 e gli ultimi 2 caratteri del codice nella tabella generale."""
+    if not codice or len(codice) < 4:
+        return "****"
+    return f"{codice[:2]}****{codice[-2:]}"
+
 def calcola_voto(tipo_test, valore):
-    """Calcolo automatico voti (esempi personalizzabili)"""
+    """Calcolo automatico voti (personalizzabile)"""
     if tipo_test == "Corsa 1000m (secondi)":
         if valore <= 210: return 10.0
         elif valore <= 230: return 9.0
@@ -43,6 +123,91 @@ def calcola_voto(tipo_test, valore):
         else: return 5.0
     return 6.0
 
+def genera_torneo_italiana(squadre, partite_per_squadra, totale_partite):
+    """
+    Genera gli abbinamenti per un torneo all'italiana parziale o completo,
+    bilanciando gli incontri ed evitando che una squadra giochi due volte di fila.
+    """
+    n = len(squadre)
+    if n < 2:
+        return None, "Inserisci almeno 2 classi/squadre partecipanti."
+    if n * partite_per_squadra != 2 * totale_partite:
+        return None, (
+            f"Impossibile bilanciare il calendario: {n} squadre × {partite_per_squadra} partite a testa "
+            f"richiedono {(n * partite_per_squadra) / 2:g} partite totali (hai inserito {totale_partite})."
+        )
+    if partite_per_squadra > n - 1:
+        # Se ci sono più partite del girone singolo, consente andata/ritorno
+        moltiplicatore = (partite_per_squadra // (n - 1)) + 1
+    else:
+        moltiplicatore = 1
+
+    # Tentativi multipli per trovare un ordine senza partite consecutive per la stessa squadra
+    for _ in range(300):
+        conteggio = {s: 0 for s in squadre}
+        sfide_usate = {}
+        calendario = []
+        possibile = True
+
+        for turno in range(totale_partite):
+            ultima_partita = calendario[-1] if calendario else (None, None)
+            # Ordina le squadre dando priorità a chi ha giocato meno partite
+            ordinate = squadre.copy()
+            random.shuffle(ordinate)
+            ordinate.sort(key=lambda x: conteggio[x])
+
+            abbinamento_trovato = None
+            for i in range(n):
+                s1 = ordinate[i]
+                if conteggio[s1] >= partite_per_squadra:
+                    continue
+                for j in range(i + 1, n):
+                    s2 = ordinate[j]
+                    if conteggio[s2] >= partite_per_squadra:
+                        continue
+                    chiave = tuple(sorted((s1, s2)))
+                    if sfide_usate.get(chiave, 0) >= moltiplicatore:
+                        continue
+                    # Evita che una squadra giochi due partite consecutive se ci sono alternative
+                    if s1 not in ultima_partita and s2 not in ultima_partita:
+                        abbinamento_trovato = (s1, s2)
+                        break
+                if abbinamento_trovato:
+                    break
+
+            # Fallback se negli ultimi turni è inevitabile giocare di seguito
+            if not abbinamento_trovato:
+                for i in range(n):
+                    s1 = ordinate[i]
+                    if conteggio[s1] >= partite_per_squadra:
+                        continue
+                    for j in range(i + 1, n):
+                        s2 = ordinate[j]
+                        if conteggio[s2] >= partite_per_squadra:
+                            continue
+                        chiave = tuple(sorted((s1, s2)))
+                        if sfide_usate.get(chiave, 0) < moltiplicatore:
+                            abbinamento_trovato = (s1, s2)
+                            break
+                    if abbinamento_trovato:
+                        break
+
+            if not abbinamento_trovato:
+                possibile = False
+                break
+
+            s1, s2 = abbinamento_trovato
+            calendario.append((s1, s2))
+            conteggio[s1] += 1
+            conteggio[s2] += 1
+            chiave = tuple(sorted((s1, s2)))
+            sfide_usate[chiave] = sfide_usate.get(chiave, 0) + 1
+
+        if possibile and len(calendario) == totale_partite:
+            return calendario, None
+
+    return None, "Non è stato possibile generare una combinazione valida con questi vincoli. Prova a modificare i numeri."
+
 # --- GESTIONE SESSIONE ---
 if "ruolo" not in st.session_state:
     st.session_state.ruolo = None
@@ -52,26 +217,29 @@ if "punti_a" not in st.session_state:
     st.session_state.punti_a = 0
 if "punti_b" not in st.session_state:
     st.session_state.punti_b = 0
+if "squadre_generate" not in st.session_state:
+    st.session_state.squadre_generate = []
+if "calendario_generato" not in st.session_state:
+    st.session_state.calendario_generato = []
+if "codice_proposto" not in st.session_state:
+    st.session_state.codice_proposto = genera_codice_sicuro()
 
 # --- SCHERMATA DI ACCESSO ---
 if st.session_state.ruolo is None:
     st.title("🏃‍♂️ Portale Educazione Motoria")
     st.markdown("Seleziona la modalità di accesso:")
-
     col1, col2 = st.columns(2)
-
     with col1:
         st.subheader("🎓 Area Studenti")
         codice_input = st.text_input("Inserisci il tuo Codice Personale:", type="password")
         if st.button("Entra come Studente", use_container_width=True):
-            res = supabase.table("studenti").select("*, classi(nome)").eq("codice_personale", codice_input.strip()).execute()
+            res = supabase.table("studenti").select("*, classi(nome)").eq("codice_personale", codice_input.strip().upper()).execute()
             if res.data:
                 st.session_state.ruolo = "studente"
                 st.session_state.studente_corrente = res.data[0]
                 st.rerun()
             else:
                 st.error("Codice personale non valido.")
-
     with col2:
         st.subheader("📋 Area Docente")
         try:
@@ -79,7 +247,6 @@ if st.session_state.ruolo is None:
             password_attuale = res_pwd.data[0]["valore"] if res_pwd.data else st.secrets["PASSWORD_DOCENTE"]
         except Exception:
             password_attuale = st.secrets["PASSWORD_DOCENTE"]
-
         pwd_input = st.text_input("Password Docente:", type="password")
         if st.button("Entra come Docente", use_container_width=True):
             if pwd_input == password_attuale:
@@ -87,329 +254,5 @@ if st.session_state.ruolo is None:
                 st.rerun()
             else:
                 st.error("Password errata.")
-
         with st.expander("🔑 Hai dimenticato o vuoi cambiare la password?"):
             st.caption("Usa il Codice Segreto (PUK) assegnato al docente per impostare una nuova password:")
-            codice_segreto = st.text_input("Codice Segreto Docente:", type="password", key="puk_doc")
-            nuova_pwd = st.text_input("Nuova Password:", type="password", key="new_pwd_doc")
-            if st.button("Salva Nuova Password", use_container_width=True):
-                if codice_segreto == "202699":
-                    if len(nuova_pwd.strip()) >= 4:
-                        try:
-                            supabase.table("impostazioni").upsert({"chiave": "password_docente", "valore": nuova_pwd.strip()}).execute()
-                            st.success("✅ Password aggiornata! Ora puoi entrare con la nuova password.")
-                        except Exception as e:
-                            st.error(f"Errore nel salvataggio su database: {e}")
-                    else:
-                        st.warning("La nuova password deve avere almeno 4 caratteri.")
-                else:
-                    st.error("❌ Codice Segreto non valido.")
-
-# --- AREA DOCENTE ---
-elif st.session_state.ruolo == "docente":
-    st.sidebar.title("📋 Menu Docente")
-    menu = st.sidebar.radio("Seleziona sezione:", [
-        "1. Classi e Studenti",
-        "2. Certificati Medici",
-        "3. Test Fisici e Voti",
-        "4. Cronometro / Timer",
-        "5. Tornei e Classifiche",
-        "6. Bacheca Avvisi",
-        "7. Squadre & Segnapunti"
-    ])
-    if st.sidebar.button("🚪 Esci (Logout)"):
-        st.session_state.ruolo = None
-        st.rerun()
-
-    # 1. CLASSI E STUDENTI
-    if menu == "1. Classi e Studenti":
-        st.header("🏫 Gestione Classi e Studenti")
-        tab1, tab2, tab3 = st.tabs(["➕ Aggiungi Classe", "➕ Aggiungi Studente", "🗑️ Elimina Classe / Studente"])
-
-        with tab1:
-            nuova_classe = st.text_input("Nome nuova classe (es. 3A, 4B):")
-            if st.button("Crea Classe"):
-                if nuova_classe:
-                    try:
-                        supabase.table("classi").insert({"nome": nuova_classe.strip()}).execute()
-                        st.success(f"Classe {nuova_classe} creata!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Errore: {e}")
-
-        with tab2:
-            classi_data = supabase.table("classi").select("*").execute().data
-            if not classi_data:
-                st.warning("Crea prima almeno una classe!")
-            else:
-                mappa_classi = {c["nome"]: c["id"] for c in classi_data}
-                classe_scelta = st.selectbox("Seleziona Classe:", list(mappa_classi.keys()))
-                nome = st.text_input("Nome Studente:")
-                cognome = st.text_input("Cognome Studente:")
-                codice = st.text_input("Codice Personale per accesso studente (es. ROSSI24):")
-                scad_cert = st.date_input("Scadenza Certificato Medico:", value=date.today())
-                note = st.text_area("Note eventuali (es. esoneri parziali, allergie):")
-
-                if st.button("Salva Studente"):
-                    if nome and cognome and codice:
-                        try:
-                            supabase.table("studenti").insert({
-                                "classe_id": mappa_classi[classe_scelta],
-                                "nome": nome.strip(),
-                                "cognome": cognome.strip(),
-                                "codice_personale": codice.strip(),
-                                "scadenza_certificato": str(scad_cert),
-                                "note": note
-                            }).execute()
-                            st.success(f"Studente {nome} {cognome} inserito!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Errore: {e}")
-
-        with tab3:
-            col_del1, col_del2 = st.columns(2)
-            with col_del1:
-                st.subheader("Elimina Studente")
-                stud_del_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
-                if stud_del_list:
-                    mappa_del_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in stud_del_list}
-                    stud_da_elim = st.selectbox("Scegli studente da eliminare:", list(mappa_del_stud.keys()))
-                    if st.button("🗑️ Elimina Studente", type="primary"):
-                        supabase.table("studenti").delete().eq("id", mappa_del_stud[stud_da_elim]).execute()
-                        st.success("Studente eliminato!")
-                        st.rerun()
-                else:
-                    st.info("Nessuno studente da eliminare.")
-
-            with col_del2:
-                st.subheader("Elimina Classe")
-                classi_del_list = supabase.table("classi").select("*").execute().data
-                if classi_del_list:
-                    mappa_del_classi = {c["nome"]: c["id"] for c in classi_del_list}
-                    classe_da_elim = st.selectbox("Scegli classe da eliminare:", list(mappa_del_classi.keys()))
-                    st.caption("⚠️ Attenzione: eliminando la classe verranno eliminati anche tutti gli studenti al suo interno.")
-                    if st.button("🗑️ Elimina Classe", type="primary"):
-                        supabase.table("classi").delete().eq("id", mappa_del_classi[classe_da_elim]).execute()
-                        st.success("Classe eliminata!")
-                        st.rerun()
-                else:
-                    st.info("Nessuna classe da eliminare.")
-
-        st.divider()
-        st.subheader("Elenco Studenti Registrati")
-        studenti_list = supabase.table("studenti").select("nome, cognome, codice_personale, scadenza_certificato, note, classi(nome)").execute().data
-        if studenti_list:
-            df = pd.DataFrame([{
-                "Classe": s["classi"]["nome"] if s["classi"] else "",
-                "Cognome": s["cognome"],
-                "Nome": s["nome"],
-                "Codice": s["codice_personale"],
-                "Scadenza Certificato": s["scadenza_certificato"],
-                "Note": s["note"]
-            } for s in studenti_list])
-            st.dataframe(df, use_container_width=True)
-
-    # 2. CERTIFICATI MEDICI
-    elif menu == "2. Certificati Medici":
-        st.header("🩺 Controllo Scadenze Certificati Medici")
-        studenti_list = supabase.table("studenti").select("id, nome, cognome, scadenza_certificato, classi(nome)").execute().data
-        oggi = date.today()
-    # 3. TEST FISICI E VOTI
-    elif menu == "3. Test Fisici e Voti":
-        st.header("⏱️ Registrazione Test Fisici e Calcolo Voti")
-        studenti_list = supabase.table("studenti").select("id, nome, cognome, classi(nome)").execute().data
-        if not studenti_list:
-            st.warning("Nessuno studente registrato.")
-        else:
-            mappa_stud = {f"{s['cognome']} {s['nome']} ({s['classi']['nome'] if s['classi'] else ''})": s["id"] for s in studenti_list}
-            stud_scelto = st.selectbox("Seleziona Studente:", list(mappa_stud.keys()))
-            tipo_test = st.selectbox("Tipo di Test:", [
-                "Corsa 1000m (secondi)",
-                "Salto in lungo da fermo (cm)",
-                "Addominali in 1 minuto (ripetizioni)"
-            ])
-            valore = st.number_input("Risultato ottenuto:", min_value=0.0, step=1.0)
-            voto_calc = calcola_voto(tipo_test, valore)
-            st.info(f"📊 Voto calcolato automaticamente: **{voto_calc}**")
-            voto_finale = st.number_input("Conferma o modifica il voto:", min_value=1.0, max_value=10.0, value=float(voto_calc), step=0.5)
-
-            if st.button("💾 Salva Risultato Test"):
-                try:
-                    supabase.table("test_fisici").insert({
-                        "studente_id": mappa_stud[stud_scelto],
-                        "tipo_test": tipo_test,
-                        "risultato": valore,
-                        "voto": voto_finale,
-                        "data_test": str(date.today())
-                    }).execute()
-                    st.success("Risultato salvato con successo!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Errore nel salvataggio: {e}")
-
-    # 4. CRONOMETRO / TIMER
-    elif menu == "4. Cronometro / Timer":
-        st.header("⏱️ Cronometro & Timer Allenamento")
-        col_t1, col_t2 = st.columns(2)
-        with col_t1:
-            st.subheader("⏲️ Conto alla Rovescia")
-            secondi_timer = st.number_input("Imposta secondi:", min_value=5, max_value=3600, value=60, step=5)
-            if st.button("▶️ Avvia Timer"):
-                placeholder = st.empty()
-                for s in range(int(secondi_timer), -1, -1):
-                    mins, secs = divmod(s, 60)
-                    placeholder.markdown(f"# ⏳ {mins:02d}:{secs:02d}")
-                    time.sleep(1)
-                placeholder.success("🔔 Tempo scaduto!")
-
-        with col_t2:
-            st.subheader("⏱️ Cronometro Manuale")
-            if "crono_start" not in st.session_state:
-                st.session_state.crono_start = None
-            if st.button("🟢 Start"):
-                st.session_state.crono_start = time.time()
-            if st.button("🔴 Stop / Rileva Tempo"):
-                if st.session_state.crono_start:
-                    trascorso = round(time.time() - st.session_state.crono_start, 2)
-                    st.success(f"Tempo rilevato: **{trascorso} secondi**")
-                else:
-                    st.warning("Premi prima Start!")
-
-    # 5. TORNEI E CLASSIFICHE
-    elif menu == "5. Tornei e Classifiche":
-        st.header("🏆 Tornei e Classifiche")
-        st.info("Registra i risultati delle partite o consulta la classifica generale del torneo scolastico.")
-        col_tor1, col_tor2 = st.columns(2)
-        with col_tor1:
-            squadra_1 = st.text_input("Squadra / Classe 1:")
-            punti_1 = st.number_input("Punteggio Squadra 1:", min_value=0, step=1)
-        with col_tor2:
-            squadra_2 = st.text_input("Squadra / Classe 2:")
-            punti_2 = st.number_input("Punteggio Squadra 2:", min_value=0, step=1)
-
-        if st.button("💾 Registra Risultato Partita"):
-            if squadra_1 and squadra_2:
-                try:
-                    supabase.table("tornei").insert({
-                        "squadra_a": squadra_1.strip(),
-                        "squadra_b": squadra_2.strip(),
-                        "punti_a": int(punti_1),
-                        "punti_b": int(punti_2),
-                        "data_partita": str(date.today())
-                    }).execute()
-                    st.success("Risultato salvato!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Errore database (verifica la tabella 'tornei'): {e}")
-
-    # 6. BACHECA AVVISI
-    elif menu == "6. Bacheca Avvisi":
-        st.header("📢 Bacheca Avvisi per gli Studenti")
-        titolo_avviso = st.text_input("Titolo dell'avviso:")
-        testo_avviso = st.text_area("Messaggio:")
-        if st.button("📤 Pubblica Avviso"):
-            if titolo_avviso and testo_avviso:
-                try:
-                    supabase.table("avvisi").insert({
-                        "titolo": titolo_avviso.strip(),
-                        "messaggio": testo_avviso.strip(),
-                        "data_pubblicazione": str(date.today())
-                    }).execute()
-                    st.success("Avviso pubblicato!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Errore nella pubblicazione: {e}")
-
-        st.divider()
-        st.subheader("Avvisi Pubblicati")
-        try:
-            avvisi_list = supabase.table("avvisi").select("*").order("id", desc=True).execute().data
-            for avv in avvisi_list:
-                with st.expander(f"📌 {avv.get('titolo', 'Avviso')} ({avv.get('data_pubblicazione', '')})"):
-                    st.write(avv.get("messaggio", ""))
-                    if st.button("🗑️ Elimina", key=f"del_avv_{avv['id']}"):
-                        supabase.table("avvisi").delete().eq("id", avv["id"]).execute()
-                        st.rerun()
-        except Exception:
-            st.info("Nessun avviso presente.")
-
-    # 7. SQUADRE & SEGNAPUNTI
-    elif menu == "7. Squadre & Segnapunti":
-        st.header("⚽ Generatore Squadre & Segnapunti Live")
-
-        tab_sq, tab_seg = st.tabs(["🎲 Crea Squadre Casuali", "🔢 Segnapunti Live"])
-
-        with tab_sq:
-            st.subheader("Genera Squadre da una Classe")
-            classi_data = supabase.table("classi").select("*").execute().data
-            if not classi_data:
-                st.warning("Nessuna classe disponibile.")
-            else:
-                mappa_classi = {c["nome"]: c["id"] for c in classi_data}
-                classe_sel = st.selectbox("Seleziona la classe:", list(mappa_classi.keys()), key="sq_classe")
-                studenti_classe = supabase.table("studenti").select("nome, cognome").eq("classe_id", mappa_classi[classe_sel]).execute().data
-
-                if studenti_classe:
-                    nomi_studenti = [f"{s['cognome']} {s['nome']}" for s in studenti_classe]
-                    presenti = st.multiselect("Seleziona gli studenti presenti oggi:", nomi_studenti, default=nomi_studenti)
-                    num_squadre = st.number_input("Numero di squadre da creare:", min_value=2, max_value=8, value=2, step=1)
-
-                    if st.button("🎲 Genera Squadre"):
-                        if len(presenti) >= num_squadre:
-                            lista_mescolata = presenti.copy()
-                            random.shuffle(lista_mescolata)
-                            squadre = [lista_mescolata[i::int(num_squadre)] for i in range(int(num_squadre))]
-                            cols = st.columns(int(num_squadre))
-                            for idx, sq in enumerate(squadre):
-                                with cols[idx]:
-                                    st.markdown(f"### Squadra {idx + 1}")
-                                    for giocatore in sq:
-                                        st.write(f"- {giocatore}")
-                        else:
-                            st.warning("Seleziona almeno tanti studenti quante sono le squadre!")
-                else:
-                    st.info("Nessuno studente registrato in questa classe.")
-
-        with tab_seg:
-            st.subheader("Segnapunti Rapido")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                nome_a = st.text_input("Nome Squadra A:", value="Squadra A")
-                st.markdown(f"<h1 style='text-align: center; font-size: 72px;'>{st.session_state.punti_a}</h1>", unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                if c1.button("➕ 1 Punto A", use_container_width=True):
-                    st.session_state.punti_a += 1
-                    st.rerun()
-                if c2.button("➖ 1 Punto A", use_container_width=True):
-                    if st.session_state.punti_a > 0:
-                        st.session_state.punti_a -= 1
-                        st.rerun()
-
-            with col_b:
-                nome_b = st.text_input("Nome Squadra B:", value="Squadra B")
-                st.markdown(f"<h1 style='text-align: center; font-size: 72px;'>{st.session_state.punti_b}</h1>", unsafe_allow_html=True)
-                c3, c4 = st.columns(2)
-                if c3.button("➕ 1 Punto B", use_container_width=True):
-                    st.session_state.punti_b += 1
-                    st.rerun()
-                if c4.button("➖ 1 Punto B", use_container_width=True):
-                    if st.session_state.punti_b > 0:
-                        st.session_state.punti_b -= 1
-                        st.rerun()
-
-            st.divider()
-            if st.button("🔄 Azzera Punteggi", use_container_width=True):
-                st.session_state.punti_a = 0
-                st.session_state.punti_b = 0
-                st.rerun()
-
-# --- AREA STUDENTI ---
-elif st.session_state.ruolo == "studente":
-    stud = st.session_state.studente_corrente
-    st.sidebar.title(f"🎓 Ciao, {stud['nome']}!")
-    if st.sidebar.button("🚪 Esci (Logout)"):
-        st.session_state.ruolo = None
-        st.session_state.studente_corrente = None
-        st.rerun()
-
-    st.title(f"🏃‍♂️ Area Personale - {stud['nome']} {stud['cognome']}")
