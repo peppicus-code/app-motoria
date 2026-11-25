@@ -181,7 +181,7 @@ elif st.session_state.ruolo == "docente":
                 c_n1, c_n2 = st.columns(2)
                 nome = c_n1.text_input("Nome Studente:")
                 cognome = c_n2.text_input("Cognome Studente:")
-                c_cod1, c_cod2 = st.columns()
+                c_cod1, c_cod2 = st.columns(2)
                 codice = c_cod1.text_input("Codice Privacy Studente:", value=st.session_state.codice_generato)
                 if c_cod2.button("🔄 Nuovo Codice", use_container_width=True):
                     st.session_state.codice_generato = genera_codice_sicuro()
